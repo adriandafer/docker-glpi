@@ -1,42 +1,70 @@
-FROM debian:lastes
+FROM ubuntu
+MAINTAINER DF
+LABEL Description="Web App basado el PHP APACHE y MARIDB como base ubuntu"
 
-MAINTAINER  Darwin Adriano adriandafer@gmail.com
+RUN apt-get update
+RUN apt-get dist-upgrade -y
 
-RUN apt-get update -y && apt-get dist-upgrade -yqq
+RUN apt-get install -y \
+	php \
+	php-bz2 \
+	php-cgi \
+	php-cli \
+	php-common \
+	php-curl \
+	php-dev \
+	php-enchant \
+	php-fpm \
+	php-gd \
+	php-gmp \
+	php-imap \
+	php-interbase \
+	php-intl \
+	php-json \
+	php-ldap \
+	php-mcrypt \
+	php-mysql \
+	php-odbc \
+	php-opcache \
+	php-pgsql \
+	php-phpdbg \
+	php-pspell \
+	php-readline \
+	php-recode \
+	php-snmp \
+	php-sqlite3 \
+	php-sybase \
+	php-tidy \
+	php-xmlrpc \
+	php-xsl
+RUN apt-get install apache2 libapache2-mod-php -y
+RUN apt-get install mariadb-common mariadb-server mariadb-client -y
+RUN apt-get install nano tree vim curl ftp git -y
+RUN echo "postfix postfix/mailname string example.com" | debconf-set-selections
+RUN echo "postfix postfix/main_mailer_type string 'Internet Site'" | debconf-set-selections
+RUN apt-get install postfix -y
 
-RUN apt-get install -y php-cli php  php-mcrypt php-curl php-mysql
-RUN apt-get install -y openss-server supervisor
-RUN mkdir -p /var/run/sshd
-
-#config usuario ssh
-RUN useradd -d  /home/glpi -m -s /gin/bash glpi
-RUN echo glpi:glpi | passwd
-RUN usermod -aG sudo glpi
-RUN sed -i 's/PermitRootLogin without-password/PermitRootLogin no' /etc/ssh/sshd_config
-
-#configuracion supervisor
-RUN mkdir -p /var/log/supervisor
-COPY ./supervisord.conf /etc/supervisor/supervisord.conf
-
-#configuracion apache
-COPY ./glpi.conf /etc/apache2/sites-avaible/
-RUN ln -s /etc/apache2/sites-avaible/glpi.conf /etc/apache2/sites-enabled/
-
-#variable del entorno DOCKER para apache2
-ENV APACHE_RUN_USER www-data
-ENV APACHE_RUN_GROUP www-data
-ENV APACHE_LOG_DIR /var/log/apache2
-ENV APACHE_PID_FILE /var/run/apache2.pid
-ENV APACHE_RUN_DIR /var/run/apache2
-ENV APACHE_LOCK_DIR /var/lock/apache2
+ENV DATE_TIMEZONE America/Guayaquil
 ENV APACHE_SERVERADMIN admin@localhost
 ENV APACHE_SERVERNAME localhost
 ENV APACHE_SERVERALIAS docker.localhost
-ENV APACHE_DOCUMENTROOT /var/www/html
+ENV APACHE_DOCUMENTROOT /var/www/html/glpi
+ENV MARIDB_DB /var/lib/mysql
 
+RUN mkdir $APACHE_DOCUMENTROOT && git clone https://github.com/glpi-project/glpi.git $APACHE_DOCUMENTROOT
+ADD start-glpi.sh /usr/sbin/
+ADD glpi.conf /etc/apache2/sites-available/
+RUN ln -s /etc/apache2/sites-available/glpi.conf /etc/apache2/sites-enabled/
 
-EXPOSE 80 22
-COPY .scripts/info.php /var/www/html/info.php
-CMD ["/usr/bin/supervisord","c", "/etc/supervisor/supervisord.conf"]
+RUN chmod +x /usr/sbin/start-glpi.sh
+RUN chown -R www-data:www-data /var/www/html
 
+VOLUME $APACHE_DOCUMENTROOT
+VOLUME $MARIDB_DB
+VOLUME /var/log/httpd
+VOLUME /var/log/mysql
 
+EXPOSE 80
+EXPOSE 3306
+
+CMD ["/usr/sbin/start-glpi.sh"]
